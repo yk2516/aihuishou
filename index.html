@@ -1,20 +1,22 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>转转二手手机搜索</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232b6cff'/%3E%3Ctext x='16' y='23' font-size='19' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E8%BD%AC%3C/text%3E%3C/svg%3E">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>二手手机搜索 · 转转 / 爱回收</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232b6cff'/%3E%3Ctext x='16' y='23' font-size='17' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E4%BA%8C%3C/text%3E%3C/svg%3E">
 <style>
-:root{--bg:#f5f6f8;--card:#fff;--text:#1a1d23;--sub:#858c99;--line:#e8ebf0;--blue:#2b6cff;--blue2:#6398ff;--price:#e74449}
+:root{--bg:#f5f6f8;--card:#fff;--text:#1a1d23;--sub:#858c99;--line:#e8ebf0;--blue:#2b6cff;--blue2:#6398ff;--price:#e74449;--zz:#e8352e;--ahs:#0b7fd4}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
 .wrap{width:min(1080px,100%);margin:auto;padding:16px 18px 56px}
 .top{position:sticky;top:0;z-index:5;margin:-16px -18px 17px;padding:16px 18px 13px;background:rgba(245,246,248,.9);border-bottom:1px solid var(--line);backdrop-filter:blur(14px)}
 .title{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .title h1{font-size:20px;margin:0;font-weight:700}
-.source{display:inline-flex;align-items:center;padding:6px 11px;border-radius:8px;background:linear-gradient(135deg,#e8352e,#ff6b5e);color:#fff;font-size:12px;font-weight:700}
 .counter{margin-left:auto;color:var(--sub);font-size:13px}
 .counter b{color:var(--text);font-size:16px}
 .source-url{color:#a2a8b2;font-size:11px;margin-top:5px}
+.switch{display:inline-flex;gap:4px;padding:3px;background:#eceef3;border-radius:10px}
+.switch button{border:0;background:transparent;color:#5b6472;font-size:13px;font-weight:650;padding:6px 14px;border-radius:8px;cursor:pointer}
+.switch button.on{background:#fff;color:var(--text);box-shadow:0 1px 3px rgba(20,25,40,.14)}
 .search{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 .search input{flex:1;min-width:150px;border:1px solid #dde2ea;border-radius:10px;padding:10px 13px;background:#fff;color:var(--text);outline:0;font-size:14px}
 .search input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(43,108,255,.12)}
@@ -54,14 +56,17 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,B
 .head{display:flex;align-items:flex-start;gap:8px}
 .idx{flex:none;min-width:22px;height:22px;line-height:22px;text-align:center;border-radius:6px;background:#eef3ff;color:var(--blue);font-size:12px;font-weight:700}
 .name{flex:1;font-size:14px;font-weight:650;line-height:1.45;word-break:break-word}
-.price{flex:none;color:var(--price);font-size:19px;font-weight:750;white-space:nowrap}
+.priceline{flex:none;text-align:right;white-space:nowrap}
+.price{color:var(--price);font-size:19px;font-weight:750}
 .price small{font-size:12px;font-weight:600}
+.orig{display:block;color:#a8aeb8;font-size:11.5px;text-decoration:line-through;margin-top:1px}
 .tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
 .tag{font-size:11.5px;border-radius:6px;padding:3px 8px;background:#f4f5f8;color:#5b6472}
 .tag.blue{background:#eef3ff;color:#2b6cff}
 .tag.green{background:#e9f7f0;color:#1a9e6a}
 .tag.orange{background:#fef2e4;color:#c07215}
 .tag.red{background:#fdecec;color:#d63a3a}
+.tag.cyan{background:#e7f5fd;color:#0b7fd4}
 .foot{display:flex;align-items:center;gap:10px;margin-top:9px;font-size:11.5px;color:#a2a8b2}
 .open{margin-left:auto;color:var(--blue);text-decoration:none;font-weight:600;font-size:12.5px}
 .empty{text-align:center;color:var(--sub);padding:48px 16px;font-size:14px;line-height:2}
@@ -74,29 +79,60 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,B
 <body>
 <main class="wrap">
 <header class="top">
-<div class="title"><h1>转转二手手机搜索</h1><span class="source">数据源：转转开放平台</span><span class="counter">已加载 <b id="count">0</b> 条</span></div>
-<div class="source-url">商品数据经官方接口实时获取 · 含系统版本 / 电池健康 / 质检信息</div>
-<form class="search" id="searchForm"><input id="kw" name="kw" placeholder="输入型号，如 iPhone 15 Pro Max" autocomplete="off"><label class="pages"><span>页数</span><input id="pages" type="number" min="1" max="3" value="1"></label><button class="btn primary">搜索</button><button class="btn ghost" type="button" id="reset">重置</button></form>
+<div class="title"><h1 id="pageTitle">二手手机搜索</h1>
+<div class="switch" id="switch"><button data-src="zz" class="on">转转</button><button data-src="ahs">爱回收</button></div>
+<span class="counter">已加载 <b id="count">0</b> 条</span></div>
+<div class="source-url" id="sourceUrl">数据源：转转开放平台 · 含系统版本 / 电池健康 / 质检信息</div>
+<form class="search" id="searchForm"><input id="kw" name="kw" placeholder="输入型号，如 iPhone 15 Pro Max" autocomplete="off"><label class="pages"><span id="pagesLabel">页数</span><input id="pages" type="number" min="1" max="3" value="1"></label><button class="btn primary">搜索</button><button class="btn ghost" type="button" id="reset">重置</button></form>
 </header>
 <div class="status"><i class="dot" id="dot"></i><span id="status">输入型号后点击搜索</span></div>
-<div class="bar"><span class="label">排序：</span><button class="sort" data-sort="default">默认</button><button class="sort" data-sort="price">价格 <em></em></button><button class="sort" data-sort="score">成色 <em></em></button><button class="sort" data-sort="system">系统 <em></em></button><button class="sort" data-sort="memory">内存 <em></em></button><button class="sort" data-sort="battery">电池健康 <em></em></button></div>
+<div class="bar"><span class="label">排序：</span><span id="sortBar"></span></div>
 <section class="filter" id="filter"><div class="filter-head">筛选条件 <span class="selected-count" id="selectedCount">0 项</span><span class="chev">⌄</span></div><div class="filter-body" id="filterBody"></div></section>
 <section class="list" id="list"></section><div class="end" id="end"></div>
 </main>
 <script>
-const STATIC_GROUPS={'型号':['iPhone 15','iPhone 14','iPhone 13','iPhone 12','iPhone 11','iPad','华为','小米'],'电池健康':['90%及以上','85%-89%','80%-84%','80%以下'],'维修情况':['功能完好无换修','有维修记录']};
-const st={rows:[],sort:'default',dir:0,filters:new Set(),kw:'',groups:[]};
+const SORTS={
+  zz:[['default','默认'],['price','价格'],['score','成色'],['system','系统'],['memory','内存'],['battery','电池健康']],
+  ahs:[['default','默认'],['price','价格'],['orig','原价'],['score','成色'],['memory','内存'],['battery','电池健康']]
+};
+const ZZ_STATIC={'型号':['iPhone 15','iPhone 14','iPhone 13','iPhone 12','iPhone 11','iPad','华为','小米'],'电池健康':['90%及以上','85%-89%','80%-84%','80%以下'],'维修情况':['功能完好无换修','有维修记录']};
+const AHS_STATIC={'电池健康':['100%','95%-99%','90%-95%','85%-90%','80%-85%'],'维修情况':['功能完好无换修','有维修记录']};
+const st={source:'zz',rows:[],sort:'default',dir:0,filters:new Set(),kw:'',groups:[],brands:[],poolSize:0};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function priceNum(s){const n=Number(String(s??'').replace(/[^\d.]/g,''));return Number.isFinite(n)?n:null}
+function priceNum(s){const n=Number(String(s??'').replace(/[^\d.]/g,''));return Number.isFinite(n)&&String(s??'').trim()!==''?n:null}
 function versionNum(s){const m=String(s||'').match(/\d+(?:\.\d+)*/);return m?m[0].split('.').map(Number):[0]}
 function arrCmp(a,b){for(let i=0;i<Math.max(a.length,b.length);i++){const d=(a[i]||0)-(b[i]||0);if(d)return d}return 0}
 function memNum(row){const src=String(row.memory||row.nick||'');const m=src.match(/(\d+)\s*(TB|GB|G|T)\b/i);if(!m)return 0;return /T/i.test(m[2])?Number(m[1])*1024:Number(m[1])}
 function scoreNum(row){const m=String(row.score||'').match(/\d+/);return m?Number(m[0]):0}
-function batteryNum(row){const t=[row.gong,row.gong1].join(' ');const m=t.match(/(\d{2,3})%/);return m?Number(m[1]):null}
+function batteryNum(row){
+  if(st.source==='ahs'){const m=String(row.battery||'').match(/(\d{2,3})/);return m?Number(m[1]):null}
+  const t=[row.gong,row.gong1].join(' ');const m=t.match(/(\d{2,3})%/);return m?Number(m[1]):null;
+}
 function batteryLevel(b){return b===null?null:b>=90?'90%及以上':b>=85?'85%-89%':b>=80?'80%-84%':'80%以下'}
+function uniqSort(arr,key){return Array.from(new Set(arr.filter(Boolean))).sort(key)}
 function buildGroups(){
-  const out=[['型号',STATIC_GROUPS['型号']]];
+  if(st.source==='ahs'){
+    const out=[];
+    const brandNames=uniqSort(st.rows.map(r=>r.brand),(a,b)=>a.localeCompare(b,'zh'));
+    if(brandNames.length)out.push(['品牌',brandNames]);
+    const cond=uniqSort(st.rows.map(r=>r.score),(a,b)=>scoreNum({score:b})-scoreNum({score:a}));
+    if(cond.length)out.push(['成色',cond]);
+    const mem=uniqSort(st.rows.map(r=>r.memory),(a,b)=>memNum({memory:a})-memNum({memory:b}));
+    if(mem.length)out.push(['内存',mem]);
+    const scr=uniqSort(st.rows.map(r=>r.screen),(a,b)=>a.localeCompare(b,'zh'));
+    if(scr.length)out.push(['屏幕',scr]);
+    const sh=uniqSort(st.rows.map(r=>r.shell),(a,b)=>a.localeCompare(b,'zh'));
+    if(sh.length)out.push(['外壳',sh]);
+    const fn=uniqSort(st.rows.map(r=>r.func),(a,b)=>a.localeCompare(b,'zh'));
+    if(fn.length)out.push(['功能',fn]);
+    const wt=uniqSort(st.rows.map(r=>r.warranty),(a,b)=>a.localeCompare(b,'zh'));
+    if(wt.length)out.push(['保修',wt]);
+    out.push(['电池健康',AHS_STATIC['电池健康']]);
+    out.push(['维修情况',AHS_STATIC['维修情况']]);
+    return out;
+  }
+  const out=[['型号',ZZ_STATIC['型号']]];
   const mem=[],sys=[],cond=[];const sm=new Set(),ss=new Set(),sc=new Set();
   st.rows.forEach(r=>{
     const mt=String(r.memory||'').toUpperCase()||((String(r.nick||'').match(/(\d+)\s*(?:GB|TB)/i)||[])[0]||'').toUpperCase();
@@ -111,16 +147,24 @@ function buildGroups(){
   if(mem.length)out.push(['内存',mem]);
   if(sys.length)out.push(['系统',sys]);
   if(cond.length)out.push(['成色',cond]);
-  out.push(['电池健康',STATIC_GROUPS['电池健康']]);
-  out.push(['维修情况',STATIC_GROUPS['维修情况']]);
+  out.push(['电池健康',ZZ_STATIC['电池健康']]);
+  out.push(['维修情况',ZZ_STATIC['维修情况']]);
   return out;
 }
 function matches(row,g,v){
   if(g==='型号')return String(row.nick||'').toLowerCase().includes(v.toLowerCase());
+  if(g==='品牌')return String(row.brand||'')===v;
   if(g==='内存')return memNum(row)===memNum({memory:v});
   if(g==='系统')return String(row.report||'').toLowerCase().startsWith(v.toLowerCase());
   if(g==='成色')return String(row.score||'').trim()===v;
-  if(g==='电池健康'){const b=batteryNum(row);return b===null?false:batteryLevel(b)===v}
+  if(g==='屏幕')return String(row.screen||'')===v;
+  if(g==='外壳')return String(row.shell||'')===v;
+  if(g==='功能')return String(row.func||'')===v;
+  if(g==='保修')return String(row.warranty||'')===v;
+  if(g==='电池健康'){
+    if(st.source==='ahs')return String(row.battery||'')===v;
+    const b=batteryNum(row);return b===null?false:batteryLevel(b)===v;
+  }
   if(g==='维修情况')return v==='功能完好无换修'?row.repairFlag==='clean':row.repairFlag!=='clean';
   return true;
 }
@@ -131,12 +175,12 @@ function rows(){
     if(chosen.length)r=r.filter(x=>chosen.some(v=>matches(x,g,v)));
   });
   if(st.sort!=='default'&&st.dir){
-    const get={price:x=>priceNum(x.price),system:x=>versionNum(x.report),memory:x=>memNum(x),battery:x=>batteryNum(x)??-1,score:x=>scoreNum(x)}[st.sort];
+    const get={price:x=>priceNum(x.price),orig:x=>priceNum(x.orig),system:x=>versionNum(x.report),memory:x=>memNum(x),battery:x=>batteryNum(x)??-1,score:x=>scoreNum(x)}[st.sort];
     r=r.map((x,i)=>({...x,__i:i})).sort((a,b)=>{const av=get(a),bv=get(b);const c=Array.isArray(av)?arrCmp(av,bv):((av??-1)-(bv??-1));return c?c*st.dir:a.__i-b.__i});
   }
   return r;
 }
-function tagClass(t){return /iOS|外观/.test(t)?'blue':/电池|充电|保修|质保/.test(t)?'green':/划痕|换|磕碰|异常|维修|掉漆/.test(t)?'red':'orange'}
+function tagClass(t){return /iOS|外观|整机/.test(t)?'blue':/电池|充电|保修|质保|在保/.test(t)?'green':/划痕|换|磕碰|异常|维修|掉漆|第三方/.test(t)?'red':'orange'}
 function renderFilters(){
   st.groups=buildGroups();
   const body=$('#filterBody');
@@ -146,41 +190,72 @@ function renderFilters(){
   $('#selectedCount').textContent=n+' 项';
   $('#selectedCount').classList.toggle('show',n>0);
 }
+function renderSortBar(){
+  $('#sortBar').innerHTML=SORTS[st.source].map(([k,label])=>`<button class="sort" data-sort="${k}">${label} <em></em></button>`).join(' ');
+  document.querySelectorAll('.sort').forEach(b=>b.onclick=()=>{const k=b.dataset.sort;if(k==='default'){st.sort='default';st.dir=0}else if(st.sort!==k){st.sort=k;st.dir=1}else st.dir=st.dir===1?-1:1;render()});
+}
+function cardTags(d){
+  const tags=[];
+  if(d.score)tags.push(`<span class="tag orange">成色 ${esc(d.score)}</span>`);
+  if(d.memory)tags.push(`<span class="tag">${esc(d.memory)}</span>`);
+  else if(memNum(d))tags.push(`<span class="tag">${memNum(d)}G</span>`);
+  if(d.report)tags.push(`<span class="tag blue">${esc(d.report)}</span>`);
+  if(d.gong)tags.push(`<span class="tag green">${esc(d.gong)}</span>`);
+  if(d.dian)tags.push(`<span class="tag green">${esc(d.dian)}</span>`);
+  if(d.ji)tags.push(`<span class="tag">${esc(d.ji)}</span>`);
+  if(d.wan)tags.push(`<span class="tag ${tagClass(d.wan)}">${esc(d.wan)}</span>`);
+  if(d.funcIssue)tags.push(`<span class="tag red">功能·${esc(d.funcIssue)}</span>`);
+  if(d.gong1&&d.gong1!=='功能完好无换修'&&d.gong1!==`功能·${d.funcIssue}`)tags.push(`<span class="tag red">${esc(d.gong1)}</span>`);
+  if(d.promotion)tags.push(`<span class="tag red">${esc(d.promotion)}</span>`);
+  if(Array.isArray(d.labels))d.labels.slice(0,3).forEach(t=>{if(!/电池|功能完好/.test(t))tags.push(`<span class="tag cyan">${esc(t)}</span>`)});
+  return tags;
+}
 function render(){
   const r=rows();
   $('#count').textContent=r.length;
-  $('#status').textContent=st.kw?`搜索“${st.kw}”完成，共 ${r.length} 条 · 转转官方实时数据`:'输入型号后点击搜索';
+  const srcName=st.source==='ahs'?'爱回收严选':'转转官方';
+  if(st.kw)$('#status').textContent=`搜索“${st.kw}”完成，共 ${r.length} 条 · ${srcName}实时数据`;
+  else if(st.source==='ahs'&&st.rows.length)$('#status').textContent=`已加载 ${r.length} 条 · 商品池 ${st.poolSize} 条 · ${srcName}实时数据`;
+  else $('#status').textContent=st.source==='ahs'?'可直接浏览，或输入型号筛选':'输入型号后点击搜索';
   $('#list').innerHTML=r.length?r.map((d,i)=>{
-    const tags=[];
-    if(d.score)tags.push(`<span class="tag orange">成色 ${esc(d.score)}</span>`);
-    if(d.memory)tags.push(`<span class="tag">${esc(d.memory)}</span>`);
-    else if(memNum(d))tags.push(`<span class="tag">${memNum(d)}G</span>`);
-    if(d.report)tags.push(`<span class="tag blue">${esc(d.report)}</span>`);
-    if(d.gong)tags.push(`<span class="tag green">${esc(d.gong)}</span>`);
-    if(d.dian)tags.push(`<span class="tag">${esc(d.dian)}</span>`);
-    if(d.ji)tags.push(`<span class="tag">${esc(d.ji)}</span>`);
-    if(d.wan)tags.push(`<span class="tag ${tagClass(d.wan)}">${esc(d.wan)}</span>`);
-    if(d.gong1&&d.gong1!=='功能完好无换修')tags.push(`<span class="tag red">${esc(d.gong1)}</span>`);
-    if(d.promotion)tags.push(`<span class="tag red">${esc(d.promotion)}</span>`);
-    return `<article class="card">${d.img?`<img class="thumb" src="${esc(d.img)}" loading="lazy" alt="" referrerpolicy="no-referrer" onerror="this.remove()">`:''}<div class="body"><div class="head"><span class="idx">${i+1}</span><span class="name">${esc(d.nick||'未命名商品')}</span><span class="price"><small>￥</small>${esc(String(d.price??'暂无'))}</span></div><div class="tags">${tags.join('')}</div><div class="foot"><span>转转 · 官方开放接口</span>${d.url?`<a class="open" href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">打开商品 ↗</a>`:''}</div></div></article>`;
+    const tags=cardTags(d);
+    const priceLine=`<span class="priceline"><span class="price"><small>￥</small>${esc(String(d.price??'暂无'))}</span>${d.orig&&priceNum(d.orig)?`<span class="orig">￥${esc(String(d.orig))}</span>`:''}</span>`;
+    return `<article class="card">${d.img?`<img class="thumb" src="${esc(d.img)}" loading="lazy" alt="" referrerpolicy="no-referrer" onerror="this.remove()">`:''}<div class="body"><div class="head"><span class="idx">${i+1}</span><span class="name">${esc(d.nick||'未命名商品')}</span>${priceLine}</div><div class="tags">${tags.join('')}</div><div class="foot"><span>${esc(d.brand||'')}${d.brand?' · ':''}${srcName}官方接口</span>${d.url?`<a class="open" href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${st.source==='ahs'?'查看质检 ↗':'打开商品 ↗'}</a>`:''}</div></div></article>`;
   }).join(''):`<div class="empty"><b>⌕</b>暂无符合条件的结果<br><small>请调整型号或筛选条件</small></div>`;
   $('#end').textContent=r.length?'—— 共 '+r.length+' 条 ——':'';
   document.querySelectorAll('.sort').forEach(b=>{b.classList.toggle('active',b.dataset.sort===st.sort);const e=b.querySelector('em');if(e)e.textContent=b.dataset.sort===st.sort&&st.dir?(st.dir===1?'↑':'↓'):''});
 }
+function applySource(){
+  const ahs=st.source==='ahs';
+  document.querySelectorAll('#switch button').forEach(b=>b.classList.toggle('on',b.dataset.src===st.source));
+  $('#pageTitle').textContent=ahs?'爱回收严选二手手机':'转转二手手机搜索';
+  $('#sourceUrl').textContent=ahs?'数据源：爱回收严选（m.aihuishou.com）· 含电池健康 / 屏幕 / 外壳 / 功能 / 保修 质检明细':'数据源：转转开放平台 · 含系统版本 / 电池健康 / 质检信息';
+  $('#kw').placeholder=ahs?'可留空浏览全部，或输入型号如 iPhone 15':'输入型号，如 iPhone 15 Pro Max';
+  $('#pagesLabel').textContent=ahs?'深度':'页数';
+  $('#pages').max=ahs?6:3;
+  $('#pages').value=ahs?3:1;
+  renderSortBar();
+}
 async function search(){
   const kw=$('#kw').value.trim();
-  if(!kw){$('#status').textContent='请先输入型号，例如 iPhone 15';$('#dot').classList.add('err');return}
+  if(st.source==='zz'&&!kw){$('#status').textContent='请先输入型号，例如 iPhone 15';$('#dot').classList.add('err');return}
   st.kw=kw;
-  const pages=Math.max(1,Math.min(3,Number($('#pages').value)||1));
+  const pages=Math.max(1,Math.min(st.source==='ahs'?6:3,Number($('#pages').value)||1));
   $('#dot').classList.remove('err');$('#dot').classList.add('busy');
-  $('#status').textContent='正在从转转获取实时数据…';
+  $('#status').textContent=st.source==='ahs'?'正在从爱回收聚合实时在售商品…':'正在从转转获取实时数据…';
   try{
-    const res=await fetch(`/api/search?kw=${encodeURIComponent(kw)}&pages=${pages}`);
+    const url=st.source==='ahs'
+      ?`/api/ahs?pages=${pages}${kw?`&kw=${encodeURIComponent(kw)}`:''}`
+      :`/api/search?kw=${encodeURIComponent(kw)}&pages=${pages}`;
+    const res=await fetch(url);
     const data=await res.json();
     if(!res.ok)throw new Error(data.error||'请求失败');
     st.rows=data.items||[];st.sort='default';st.dir=0;st.filters.clear();
+    st.poolSize=data.poolSize||st.rows.length;
+    st.brands=data.brands||[];
     renderFilters();render();
-    $('#status').textContent=`加载完成：${st.rows.length} 条 · ${data.pages||pages} 页 · 来源转转开放平台`;
+    if(st.source==='ahs')$('#status').textContent=`加载完成：${st.rows.length} 条 · 商品池 ${st.poolSize} 条 · 爱回收严选实时数据`;
+    else $('#status').textContent=`加载完成：${st.rows.length} 条 · ${data.pages||pages} 页 · 来源转转开放平台`;
   }catch(e){
     st.rows=[];st.groups=[];render();
     $('#dot').classList.add('err');
@@ -188,9 +263,15 @@ async function search(){
   }finally{$('#dot').classList.remove('busy')}
 }
 $('#searchForm').onsubmit=e=>{e.preventDefault();search()};
-$('#reset').onclick=()=>{st.rows=[];st.kw='';st.sort='default';st.dir=0;st.filters.clear();$('#kw').value='';renderFilters();render();$('#dot').classList.remove('err')};
+$('#reset').onclick=()=>{st.rows=[];st.kw='';st.sort='default';st.dir=0;st.filters.clear();st.poolSize=0;$('#kw').value='';renderFilters();render();$('#dot').classList.remove('err');$('#status').textContent=st.source==='ahs'?'可直接浏览，或输入型号筛选':'输入型号后点击搜索'};
 $('#filter .filter-head').onclick=()=>$('#filter').classList.toggle('open');
-document.querySelectorAll('.sort').forEach(b=>b.onclick=()=>{const k=b.dataset.sort;if(k==='default'){st.sort='default';st.dir=0}else if(st.sort!==k){st.sort=k;st.dir=1}else st.dir=st.dir===1?-1:1;render()});
-renderFilters();render();
+document.querySelectorAll('#switch button').forEach(b=>b.onclick=()=>{
+  if(st.source===b.dataset.src)return;
+  st.source=b.dataset.src;st.rows=[];st.kw='';st.sort='default';st.dir=0;st.filters.clear();st.poolSize=0;
+  $('#kw').value='';$('#dot').classList.remove('err');
+  applySource();renderFilters();render();
+  if(st.source==='ahs')search();
+});
+applySource();renderFilters();render();
 </script>
 </body></html>
