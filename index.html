@@ -325,7 +325,7 @@ async function enrich(my){
   for(let i=0;i<ids.length;i+=45)batches.push(ids.slice(i,i+45));
   st.condTotal=ids.length;st.condDone=0;
   const alive=()=>my===reqId&&st.source==='ahs'&&token===enrichToken;
-  await mapLimitLocal(batches,4,async b=>{
+  await mapLimitLocal(batches,8,async b=>{
     if(!alive())return;
     try{
       const res=await fetch(`/api/ahs?cond=1&ids=${encodeURIComponent(b.join(','))}`);

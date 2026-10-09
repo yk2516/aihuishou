@@ -470,7 +470,7 @@ function poolRows() {
 const COND_CACHE_KEY = 'https://pool-cache.aihuishou.internal/yanxuan/cond/v1';
 const COND_CACHE_SECONDS = 3600;
 const COND_BATCH = 45;
-const COND_CONCURRENCY = 15;
+const COND_CONCURRENCY = 45;
 
 let condCache = new Map();
 let condHydrated = false;
@@ -515,10 +515,17 @@ async function fetchCond(id) {
     const response = await fetch(`${BASE}/products/goods-tag-param?saleGoodsNo=${encodeURIComponent(id)}`, {
       headers: signHeaders()
     });
-    if (!response.ok) return null;
+    // 请求失败返回 undefined：不写缓存，下次访问重试
+    if (!response.ok) return undefined;
     const text = await response.text();
-    if (/^\s*</.test(text)) return null;
-    const payload = JSON.parse(text);
+    if (/^\s*</.test(text)) return undefined;
+    let payload;
+    try {
+      payload = JSON.parse(text);
+    } catch (_) {
+      return undefined;
+    }
+    // 业务层明确「无此商品 / 无数据」返回 null：可长期缓存，避免反复回源
     if (payload.code !== 0 || !payload.data) return null;
     const list = Array.isArray(payload.data.machineConditionList) ? payload.data.machineConditionList : [];
     const pick = (name) => {
@@ -534,7 +541,7 @@ async function fetchCond(id) {
     if (!cond.battery && !cond.cycles && !cond.system && !cond.warranty) return null;
     return cond;
   } catch (_) {
-    return null;
+    return undefined;
   }
 }
 
@@ -554,6 +561,7 @@ async function handleCond(url, context) {
   if (todo.length) {
     await mapLimit(todo, COND_CONCURRENCY, async (id) => {
       const value = await fetchCond(id);
+      if (value === undefined) return; // 请求失败：不落缓存，下次重试
       condCache.set(id, value);
       condDirty = true;
     });
