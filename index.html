@@ -96,7 +96,7 @@ const SORTS={
   ahs:[['default','默认'],['price','价格'],['orig','原价'],['score','成色'],['memory','内存'],['battery','电池健康']]
 };
 const ZZ_STATIC={'型号':['iPhone 15','iPhone 14','iPhone 13','iPhone 12','iPhone 11','iPad','华为','小米'],'电池健康':['90%及以上','85%-89%','80%-84%','80%以下'],'维修情况':['功能完好无换修','有维修记录']};
-const AHS_STATIC={'电池健康':['100%','95%-99%','90%-95%','85%-90%','80%-85%'],'维修情况':['功能完好无换修','有维修记录']};
+const AHS_STATIC={'电池健康':['100%','95%-99%','90%-95%','85%-90%','80%-85%'],'维修情况':['无换修无异常','有功能异常','有换修记录']};
 const st={source:'zz',rows:[],sort:'default',dir:0,filters:new Set(),kw:'',groups:[],brands:[],poolSize:0};
 let reqId=0, shown=60;
 const PAGE=60;
@@ -167,7 +167,12 @@ function matches(row,g,v){
     if(st.source==='ahs')return String(row.battery||'')===v;
     const b=batteryNum(row);return b===null?false:batteryLevel(b)===v;
   }
-  if(g==='维修情况')return v==='功能完好无换修'?row.repairFlag==='clean':row.repairFlag!=='clean';
+  if(g==='维修情况'){
+    if(v==='无换修无异常')return row.repairFlag==='clean'&&!row.funcIssue;
+    if(v==='有功能异常')return !!row.funcIssue;
+    if(v==='有换修记录'||v==='有维修记录')return row.repairFlag!=='clean';
+    return v==='功能完好无换修'?row.repairFlag==='clean':row.repairFlag!=='clean';
+  }
   return true;
 }
 function rows(){
@@ -202,7 +207,7 @@ function cardTags(d){
   if(d.memory)tags.push(`<span class="tag">${esc(d.memory)}</span>`);
   else if(memNum(d))tags.push(`<span class="tag">${memNum(d)}G</span>`);
   if(d.report)tags.push(`<span class="tag blue">${esc(d.report)}</span>`);
-  if(d.gong)tags.push(`<span class="tag green">${esc(d.gong)}</span>`);
+  if(d.gong)tags.push(`<span class="tag ${/第三方/.test(d.gong)?'red':'green'}">${esc(d.gong)}</span>`);
   if(d.dian)tags.push(`<span class="tag green">${esc(d.dian)}</span>`);
   if(d.ji)tags.push(`<span class="tag">${esc(d.ji)}</span>`);
   if(d.wan)tags.push(`<span class="tag ${tagClass(d.wan)}">${esc(d.wan)}</span>`);
