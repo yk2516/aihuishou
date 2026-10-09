@@ -98,6 +98,8 @@ const SORTS={
 const ZZ_STATIC={'型号':['iPhone 15','iPhone 14','iPhone 13','iPhone 12','iPhone 11','iPad','华为','小米'],'电池健康':['90%及以上','85%-89%','80%-84%','80%以下'],'维修情况':['功能完好无换修','有维修记录']};
 const AHS_STATIC={'电池健康':['100%','95%-99%','90%-95%','85%-90%','80%-85%'],'维修情况':['功能完好无换修','有维修记录']};
 const st={source:'zz',rows:[],sort:'default',dir:0,filters:new Set(),kw:'',groups:[],brands:[],poolSize:0};
+let reqId=0, shown=60;
+const PAGE=60;
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function priceNum(s){const n=Number(String(s??'').replace(/[^\d.]/g,''));return Number.isFinite(n)&&String(s??'').trim()!==''?n:null}
@@ -185,14 +187,14 @@ function renderFilters(){
   st.groups=buildGroups();
   const body=$('#filterBody');
   body.innerHTML=st.groups.map(([g,vs])=>`<div class="group"><span class="group-name">${esc(g)}</span><div class="chips">${vs.map(v=>`<button class="chip ${st.filters.has(g+'='+v)?'on':''}" data-g="${esc(g)}" data-v="${esc(v)}">${esc(v)}</button>`).join('')}</div></div>`).join('');
-  body.querySelectorAll('.chip').forEach(b=>{b.onclick=()=>{const k=b.dataset.g+'='+b.dataset.v;if(st.filters.has(k))st.filters.delete(k);else st.filters.add(k);renderFilters();render()}});
+  body.querySelectorAll('.chip').forEach(b=>{b.onclick=()=>{const k=b.dataset.g+'='+b.dataset.v;if(st.filters.has(k))st.filters.delete(k);else st.filters.add(k);shown=PAGE;renderFilters();render()}});
   const n=st.filters.size;
   $('#selectedCount').textContent=n+' 项';
   $('#selectedCount').classList.toggle('show',n>0);
 }
 function renderSortBar(){
   $('#sortBar').innerHTML=SORTS[st.source].map(([k,label])=>`<button class="sort" data-sort="${k}">${label} <em></em></button>`).join(' ');
-  document.querySelectorAll('.sort').forEach(b=>b.onclick=()=>{const k=b.dataset.sort;if(k==='default'){st.sort='default';st.dir=0}else if(st.sort!==k){st.sort=k;st.dir=1}else st.dir=st.dir===1?-1:1;render()});
+  document.querySelectorAll('.sort').forEach(b=>b.onclick=()=>{const k=b.dataset.sort;if(k==='default'){st.sort='default';st.dir=0}else if(st.sort!==k){st.sort=k;st.dir=1}else st.dir=st.dir===1?-1:1;shown=PAGE;render()});
 }
 function cardTags(d){
   const tags=[];
@@ -217,12 +219,18 @@ function render(){
   if(st.kw)$('#status').textContent=`搜索“${st.kw}”完成，共 ${r.length} 条 · ${srcName}实时数据`;
   else if(st.source==='ahs'&&st.rows.length)$('#status').textContent=`已加载 ${r.length} 条 · 商品池 ${st.poolSize} 条 · ${srcName}实时数据`;
   else $('#status').textContent=st.source==='ahs'?'可直接浏览，或输入型号筛选':'输入型号后点击搜索';
-  $('#list').innerHTML=r.length?r.map((d,i)=>{
+  const view=r.slice(0,shown);
+  $('#list').innerHTML=view.length?view.map((d,i)=>{
     const tags=cardTags(d);
     const priceLine=`<span class="priceline"><span class="price"><small>￥</small>${esc(String(d.price??'暂无'))}</span>${d.orig&&priceNum(d.orig)?`<span class="orig">￥${esc(String(d.orig))}</span>`:''}</span>`;
     return `<article class="card">${d.img?`<img class="thumb" src="${esc(d.img)}" loading="lazy" alt="" referrerpolicy="no-referrer" onerror="this.remove()">`:''}<div class="body"><div class="head"><span class="idx">${i+1}</span><span class="name">${esc(d.nick||'未命名商品')}</span>${priceLine}</div><div class="tags">${tags.join('')}</div><div class="foot"><span>${esc(d.brand||'')}${d.brand?' · ':''}${srcName}官方接口</span>${d.url?`<a class="open" href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${st.source==='ahs'?'查看质检 ↗':'打开商品 ↗'}</a>`:''}</div></div></article>`;
   }).join(''):`<div class="empty"><b>⌕</b>暂无符合条件的结果<br><small>请调整型号或筛选条件</small></div>`;
-  $('#end').textContent=r.length?'—— 共 '+r.length+' 条 ——':'';
+  if(r.length>shown){
+    $('#end').innerHTML=`<button class="btn ghost" id="more">显示更多 · 还有 ${r.length-shown} 条</button>`;
+    $('#more').onclick=()=>{shown+=PAGE;render()};
+  }else{
+    $('#end').textContent=r.length?'—— 共 '+r.length+' 条 ——':'';
+  }
   document.querySelectorAll('.sort').forEach(b=>{b.classList.toggle('active',b.dataset.sort===st.sort);const e=b.querySelector('em');if(e)e.textContent=b.dataset.sort===st.sort&&st.dir?(st.dir===1?'↑':'↓'):''});
 }
 function applySource(){
@@ -241,33 +249,56 @@ async function search(){
   if(st.source==='zz'&&!kw){$('#status').textContent='请先输入型号，例如 iPhone 15';$('#dot').classList.add('err');return}
   st.kw=kw;
   const pages=Math.max(1,Math.min(st.source==='ahs'?6:3,Number($('#pages').value)||1));
+  const my=++reqId;
   $('#dot').classList.remove('err');$('#dot').classList.add('busy');
   $('#status').textContent=st.source==='ahs'?'正在从爱回收聚合实时在售商品…':'正在从转转获取实时数据…';
   try{
-    const url=st.source==='ahs'
-      ?`/api/ahs?pages=${pages}${kw?`&kw=${encodeURIComponent(kw)}`:''}`
-      :`/api/search?kw=${encodeURIComponent(kw)}&pages=${pages}`;
-    const res=await fetch(url);
+    if(st.source==='ahs'){
+      const qs=k=>`/api/ahs?pages=${k}${kw?`&kw=${encodeURIComponent(kw)}`:''}`;
+      // 第一段：轻量首屏，秒出内容
+      const first=await fetch(qs(1)).then(r=>r.json());
+      if(my!==reqId||st.source!=='ahs')return;
+      if(first.error)throw new Error(first.error);
+      st.rows=first.items||[];st.sort='default';st.dir=0;st.filters.clear();shown=PAGE;
+      st.poolSize=first.poolSize||st.rows.length;
+      renderFilters();render();
+      if(pages<=1){
+        $('#status').textContent=`加载完成：${st.rows.length} 条 · 商品池 ${st.poolSize} 条 · 爱回收严选实时数据`;
+        return;
+      }
+      $('#status').textContent=`已加载 ${st.rows.length} 条 · 正在补充更多…`;
+      // 第二段：后台补齐深度，服务端只补差量
+      const full=await fetch(qs(pages)).then(r=>r.json());
+      if(my!==reqId||st.source!=='ahs')return;
+      if(!full.error){
+        st.rows=full.items||st.rows;st.poolSize=full.poolSize||st.poolSize;
+        renderFilters();render();
+      }
+      $('#status').textContent=`加载完成：${st.rows.length} 条 · 商品池 ${st.poolSize} 条 · 爱回收严选实时数据`;
+      return;
+    }
+    const res=await fetch(`/api/search?kw=${encodeURIComponent(kw)}&pages=${pages}`);
     const data=await res.json();
+    if(my!==reqId||st.source!=='zz')return;
     if(!res.ok)throw new Error(data.error||'请求失败');
-    st.rows=data.items||[];st.sort='default';st.dir=0;st.filters.clear();
+    st.rows=data.items||[];st.sort='default';st.dir=0;st.filters.clear();shown=PAGE;
     st.poolSize=data.poolSize||st.rows.length;
     st.brands=data.brands||[];
     renderFilters();render();
-    if(st.source==='ahs')$('#status').textContent=`加载完成：${st.rows.length} 条 · 商品池 ${st.poolSize} 条 · 爱回收严选实时数据`;
-    else $('#status').textContent=`加载完成：${st.rows.length} 条 · ${data.pages||pages} 页 · 来源转转开放平台`;
+    $('#status').textContent=`加载完成：${st.rows.length} 条 · ${data.pages||pages} 页 · 来源转转开放平台`;
   }catch(e){
-    st.rows=[];st.groups=[];render();
+    if(my!==reqId)return;
+    st.rows=[];st.groups=[];shown=PAGE;render();
     $('#dot').classList.add('err');
     $('#status').textContent='获取失败：'+e.message+'；请稍后重试';
-  }finally{$('#dot').classList.remove('busy')}
+  }finally{if(my===reqId)$('#dot').classList.remove('busy')}
 }
 $('#searchForm').onsubmit=e=>{e.preventDefault();search()};
-$('#reset').onclick=()=>{st.rows=[];st.kw='';st.sort='default';st.dir=0;st.filters.clear();st.poolSize=0;$('#kw').value='';renderFilters();render();$('#dot').classList.remove('err');$('#status').textContent=st.source==='ahs'?'可直接浏览，或输入型号筛选':'输入型号后点击搜索'};
+$('#reset').onclick=()=>{st.rows=[];st.kw='';st.sort='default';st.dir=0;st.filters.clear();st.poolSize=0;shown=PAGE;$('#kw').value='';renderFilters();render();$('#dot').classList.remove('err');$('#status').textContent=st.source==='ahs'?'可直接浏览，或输入型号筛选':'输入型号后点击搜索'};
 $('#filter .filter-head').onclick=()=>$('#filter').classList.toggle('open');
 document.querySelectorAll('#switch button').forEach(b=>b.onclick=()=>{
   if(st.source===b.dataset.src)return;
-  st.source=b.dataset.src;st.rows=[];st.kw='';st.sort='default';st.dir=0;st.filters.clear();st.poolSize=0;
+  st.source=b.dataset.src;st.rows=[];st.kw='';st.sort='default';st.dir=0;st.filters.clear();st.poolSize=0;shown=PAGE;
   $('#kw').value='';$('#dot').classList.remove('err');
   applySource();renderFilters();render();
   if(st.source==='ahs')search();

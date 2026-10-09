@@ -22,7 +22,7 @@ const SCENES = [
   'FS_CHANNEL_PHONE_01'
 ];
 
-const CONCURRENCY = 6;
+const CONCURRENCY = 8;
 const MAX_PAGES_PER_SCENE = 6;
 const CACHE_TTL = 10 * 60 * 1000;
 const MAX_SUBREQUESTS = 44;
@@ -276,10 +276,28 @@ function toRow(item, brandName) {
     warranty: warranty,
     whole: whole,
     goodsNo: saleGoodsNo,
+    promotion: item.activityTag || '',
     discount: item.activityTag || '',
     reportNo: item.gaeaQualityReportNo || '',
     flaws: Array.isArray(item.flawImages) ? item.flawImages.length : 0
   };
+}
+
+/* 仅回传前端真正消费的字段，把 300KB+ 的响应压到一半左右 */
+const CLIENT_FIELDS = [
+  'nick', 'price', 'orig', 'score', 'memory', 'report', 'gong', 'dian', 'ji', 'wan',
+  'gong1', 'funcIssue', 'promotion', 'labels', 'img', 'url', 'brand', 'screen', 'shell',
+  'func', 'warranty', 'repairFlag', 'battery'
+];
+function slim(row) {
+  const out = {};
+  for (const key of CLIENT_FIELDS) {
+    const value = row[key];
+    if (value === '' || value === null || value === undefined) continue;
+    if (Array.isArray(value) && !value.length) continue;
+    out[key] = value;
+  }
+  return out;
 }
 
 async function mapLimit(list, limit, worker) {
@@ -296,8 +314,14 @@ async function mapLimit(list, limit, worker) {
   return results;
 }
 
-/* ---------------- 商品池（进程内缓存） ---------------- */
-let poolCache = { at: 0, rows: [], brands: {} };
+/* ---------------- 商品池（进程内增量缓存） ----------------
+ * 缓存按「已抓取到第几页」记录，深度从 1 加到 3 时只补差量，
+ * 前端因此可以先用 pages=1 秒出首屏，再后台补齐到 pages=3。
+ */
+function emptyCache() {
+  return { at: 0, pages: 0, brands: {}, items: new Map(), requests: 0, dirty: false };
+}
+let poolCache = emptyCache();
 let inflight = null;
 
 async function loadBrands() {
@@ -313,60 +337,129 @@ async function loadBrands() {
   }
 }
 
-async function buildPool(pagesPerScene) {
-  const jobs = [];
-  for (const scene of SCENES) {
-    for (let page = 0; page < pagesPerScene; page++) jobs.push({ scene, page });
+async function fetchScenePage(scene, page) {
+  try {
+    const data = await ahsPost('/products/rec', {
+      cityId: 306,
+      localCityId: 306,
+      locateCityId: 306,
+      poolId: '',
+      pageIndex: page,
+      pageSize: 20,
+      scene
+    });
+    return Array.isArray(data) ? data : [];
+  } catch (_) {
+    return [];
   }
-  const limited = jobs.slice(0, MAX_SUBREQUESTS - 1);
-
-  const [brands, pages] = await Promise.all([
-    loadBrands(),
-    mapLimit(limited, CONCURRENCY, async ({ scene, page }) => {
-      try {
-        const data = await ahsPost('/products/rec', {
-          cityId: 306,
-          localCityId: 306,
-          locateCityId: 306,
-          poolId: '',
-          pageIndex: page,
-          pageSize: 20,
-          scene
-        });
-        return Array.isArray(data) ? data : [];
-      } catch (_) {
-        return [];
-      }
-    })
-  ]);
-
-  const seen = new Map();
-  for (const list of pages) {
-    for (const item of list) {
-      const key = item.saleGoodsNo || item.productNo;
-      if (key && !seen.has(key)) seen.set(key, item);
-    }
-  }
-
-  const rows = [];
-  for (const item of seen.values()) rows.push(toRow(item, brands[item.gaeaBrandId] || ''));
-
-  return { rows, brands, scenes: SCENES.length, pages: pagesPerScene, fetched: limited.length };
 }
 
-async function getPool(pagesPerScene) {
-  const now = Date.now();
-  if (poolCache.rows.length && now - poolCache.at < CACHE_TTL && poolCache.pages >= pagesPerScene) {
-    return poolCache;
+async function buildPool(fromPage, toPage) {
+  const jobs = [];
+  for (const scene of SCENES) {
+    for (let page = fromPage; page < toPage; page++) jobs.push({ scene, page });
   }
-  if (inflight) return inflight;
-  inflight = buildPool(pagesPerScene)
-    .then((result) => {
-      poolCache = { at: Date.now(), pages: pagesPerScene, ...result };
-      return poolCache;
-    })
-    .finally(() => { inflight = null; });
-  return inflight;
+  const needBrands = poolCache.items.size === 0;
+  const budget = Math.max(1, MAX_SUBREQUESTS - (needBrands ? 1 : 0));
+  const limited = jobs.slice(0, budget);
+
+  const [brands, pages] = await Promise.all([
+    needBrands ? loadBrands() : Promise.resolve(null),
+    mapLimit(limited, CONCURRENCY, ({ scene, page }) => fetchScenePage(scene, page))
+  ]);
+
+  const items = [];
+  for (const list of pages) for (const item of list) items.push(item);
+  return { items, brands, fetched: limited.length };
+}
+
+async function ensurePool(pagesPerScene) {
+  for (let guard = 0; guard < 6; guard++) {
+    if (poolCache.items.size && Date.now() - poolCache.at >= CACHE_TTL) poolCache = emptyCache();
+    if (poolCache.items.size && poolCache.pages >= pagesPerScene) return;
+    if (inflight) { await inflight.catch(() => {}); continue; }
+    const from = poolCache.pages;
+    inflight = buildPool(from, pagesPerScene)
+      .then(({ items, brands, fetched }) => {
+        for (const item of items) {
+          const key = item.saleGoodsNo || item.productNo;
+          if (key && !poolCache.items.has(key)) poolCache.items.set(key, item);
+        }
+        if (brands) Object.assign(poolCache.brands, brands);
+        poolCache.pages = Math.max(poolCache.pages, pagesPerScene);
+        poolCache.requests += fetched;
+        poolCache.at = Date.now();
+        poolCache.dirty = true;
+      })
+      .finally(() => { inflight = null; });
+    await inflight;
+  }
+}
+
+/* ---------------- 商品池持久化（Cache API，跨 isolate / 跨用户共享） ----------------
+ * Pages Functions 不会自动缓存函数响应，这里显式写入边缘缓存：
+ * 冷访客同步构建，之后所有访客直接命中缓存；过期时先返回旧池、后台刷新。
+ */
+const POOL_CACHE_KEY = 'https://pool-cache.aihuishou.internal/yanxuan/v2';
+const POOL_CACHE_SECONDS = 1800;
+const hasCacheApi = typeof caches !== 'undefined' && caches && caches.default;
+
+async function hydratePool() {
+  if (poolCache.items.size || !hasCacheApi) return;
+  try {
+    const hit = await caches.default.match(new Request(POOL_CACHE_KEY));
+    if (!hit) return;
+    const data = await hit.json();
+    if (!data || !Array.isArray(data.items) || !data.items.length) return;
+    const items = new Map();
+    for (const item of data.items) {
+      const key = item.saleGoodsNo || item.productNo;
+      if (key) items.set(key, item);
+    }
+    poolCache = {
+      at: Number(data.at) || Date.now(),
+      pages: Number(data.pages) || 0,
+      brands: data.brands || {},
+      items,
+      requests: Number(data.requests) || 0,
+      dirty: false
+    };
+  } catch (_) { /* 缓存不可用时忽略，退化为直连 */ }
+}
+
+async function persistPool() {
+  if (!hasCacheApi || !poolCache.dirty) return;
+  try {
+    const body = JSON.stringify({
+      at: poolCache.at,
+      pages: poolCache.pages,
+      brands: poolCache.brands,
+      requests: poolCache.requests,
+      items: Array.from(poolCache.items.values())
+    });
+    await caches.default.put(
+      new Request(POOL_CACHE_KEY),
+      new Response(body, {
+        headers: { 'content-type': 'application/json', 'cache-control': `max-age=${POOL_CACHE_SECONDS}` }
+      })
+    );
+    poolCache.dirty = false;
+  } catch (_) { /* 忽略写缓存失败 */ }
+}
+
+async function refreshPool(pagesPerScene) {
+  try {
+    await ensurePool(pagesPerScene);
+    await persistPool();
+  } catch (_) { /* 后台刷新失败不影响本次响应 */ }
+}
+
+function poolRows() {
+  const rows = [];
+  for (const item of poolCache.items.values()) {
+    rows.push(toRow(item, poolCache.brands[item.gaeaBrandId] || ''));
+  }
+  return rows;
 }
 
 /* ---------------- 入口 ---------------- */
@@ -376,8 +469,27 @@ export async function onRequestGet(context) {
   const pagesPerScene = Math.max(1, Math.min(MAX_PAGES_PER_SCENE, Number(url.searchParams.get('pages') || 3)));
 
   try {
-    const pool = await getPool(pagesPerScene);
-    let rows = pool.rows;
+    await hydratePool();
+
+    const stale = poolCache.items.size > 0 && Date.now() - poolCache.at >= CACHE_TTL;
+    if (stale) {
+      // 旧池可用：先秒回，后台再刷新
+      if (context && typeof context.waitUntil === 'function') {
+        context.waitUntil(refreshPool(pagesPerScene));
+      } else {
+        await refreshPool(pagesPerScene);
+      }
+    } else {
+      await ensurePool(pagesPerScene);
+      if (context && typeof context.waitUntil === 'function' && poolCache.dirty) {
+        context.waitUntil(persistPool());
+      } else {
+        await persistPool();
+      }
+    }
+
+    const allRows = poolRows();
+    let rows = allRows;
 
     if (kw) {
       const needle = kw.toLowerCase().replace(/\s+/g, '');
@@ -388,7 +500,7 @@ export async function onRequestGet(context) {
     }
 
     const brandCount = {};
-    for (const row of pool.rows) {
+    for (const row of allRows) {
       if (row.brand) brandCount[row.brand] = (brandCount[row.brand] || 0) + 1;
     }
 
@@ -397,12 +509,13 @@ export async function onRequestGet(context) {
         source: '爱回收严选',
         keyword: kw,
         total: rows.length,
-        poolSize: pool.rows.length,
-        scenes: pool.scenes,
-        pages: pool.pages,
-        requests: pool.fetched,
+        poolSize: allRows.length,
+        scenes: SCENES.length,
+        pages: poolCache.pages,
+        requests: poolCache.requests,
+        stale,
         brands: Object.entries(brandCount).sort((a, b) => b[1] - a[1]).slice(0, 24).map(([name, count]) => ({ name, count })),
-        items: rows
+        items: rows.map(slim)
       },
       { headers: { 'cache-control': 'public, max-age=60, s-maxage=300' } }
     );
