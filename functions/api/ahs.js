@@ -263,7 +263,7 @@ function toRow(item, brandName) {
     repairFlag: hasRepair ? 'has-repair' : 'clean',
     funcIssue: funcIssue,
     img: imgs[0] || item.detailFirstImage || '',
-    url: saleGoodsNo ? `https://m.aihuishou.com/p/selected/x-ray?saleGoodsNo=${encodeURIComponent(saleGoodsNo)}` : '',
+    url: saleGoodsNo ? `https://m.aihuishou.com/n/ofn/strict-selected/product/detail?saleGoodsNo=${encodeURIComponent(saleGoodsNo)}` : '',
     labels: Array.isArray(item.productTag) ? item.productTag : [],
     brand: brandName || '',
     brandId: item.gaeaBrandId ?? '',
@@ -287,7 +287,7 @@ function toRow(item, brandName) {
 const CLIENT_FIELDS = [
   'nick', 'price', 'orig', 'score', 'memory', 'report', 'gong', 'dian', 'ji', 'wan',
   'gong1', 'funcIssue', 'promotion', 'labels', 'img', 'url', 'brand', 'screen', 'shell',
-  'func', 'warranty', 'repairFlag', 'battery'
+  'func', 'warranty', 'repairFlag', 'battery', 'goodsNo'
 ];
 function slim(row) {
   const out = {};
@@ -462,9 +462,121 @@ function poolRows() {
   return rows;
 }
 
+/* ---------------- 核心机况补全（电池效率 / 充电次数 / 系统版本 / 保修情况） ----------------
+ * 列表接口 products/rec 不含这四项，需按 saleGoodsNo 调 GET products/goods-tag-param 逐条取。
+ * 因此拆成独立入口 /api/ahs?cond=1&ids=a,b,c，由前端在首屏渲染后分批后台补齐；
+ * 结果落 Cache API，回访用户直接命中，不再回源。
+ */
+const COND_CACHE_KEY = 'https://pool-cache.aihuishou.internal/yanxuan/cond/v1';
+const COND_CACHE_SECONDS = 3600;
+const COND_BATCH = 45;
+const COND_CONCURRENCY = 15;
+
+let condCache = new Map();
+let condHydrated = false;
+let condDirty = false;
+
+async function hydrateCond() {
+  if (condHydrated) return;
+  condHydrated = true;
+  if (!hasCacheApi) return;
+  try {
+    const hit = await caches.default.match(new Request(COND_CACHE_KEY));
+    if (!hit) return;
+    const data = await hit.json();
+    if (data && typeof data === 'object') {
+      for (const key of Object.keys(data)) condCache.set(key, data[key]);
+    }
+  } catch (_) { /* 缓存不可用则退化为直连 */ }
+}
+
+async function persistCond() {
+  if (!hasCacheApi || !condDirty) return;
+  condDirty = false;
+  try {
+    let merged = {};
+    const prev = await caches.default.match(new Request(COND_CACHE_KEY));
+    if (prev) {
+      const old = await prev.json().catch(() => null);
+      if (old && typeof old === 'object') merged = old;
+    }
+    for (const [key, value] of condCache) merged[key] = value;
+    await caches.default.put(
+      new Request(COND_CACHE_KEY),
+      new Response(JSON.stringify(merged), {
+        headers: { 'content-type': 'application/json', 'cache-control': `max-age=${COND_CACHE_SECONDS}` }
+      })
+    );
+  } catch (_) { /* 忽略写缓存失败 */ }
+}
+
+async function fetchCond(id) {
+  try {
+    const response = await fetch(`${BASE}/products/goods-tag-param?saleGoodsNo=${encodeURIComponent(id)}`, {
+      headers: signHeaders()
+    });
+    if (!response.ok) return null;
+    const text = await response.text();
+    if (/^\s*</.test(text)) return null;
+    const payload = JSON.parse(text);
+    if (payload.code !== 0 || !payload.data) return null;
+    const list = Array.isArray(payload.data.machineConditionList) ? payload.data.machineConditionList : [];
+    const pick = (name) => {
+      const hit = list.find((x) => x && x.name === name);
+      return hit ? String(hit.value == null ? '' : hit.value).trim() : '';
+    };
+    const cond = {
+      battery: pick('电池效率'),
+      cycles: pick('充电次数'),
+      system: pick('系统版本'),
+      warranty: pick('保修情况')
+    };
+    if (!cond.battery && !cond.cycles && !cond.system && !cond.warranty) return null;
+    return cond;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function handleCond(url, context) {
+  await hydrateCond();
+
+  const ids = [];
+  const seen = new Set();
+  for (const raw of String(url.searchParams.get('ids') || '').split(',')) {
+    const id = raw.trim();
+    if (id && !seen.has(id)) { seen.add(id); ids.push(id); }
+    if (ids.length >= COND_BATCH) break;
+  }
+  if (!ids.length) return Response.json({ error: '缺少 ids 参数' }, { status: 400 });
+
+  const todo = ids.filter((id) => !condCache.has(id));
+  if (todo.length) {
+    await mapLimit(todo, COND_CONCURRENCY, async (id) => {
+      const value = await fetchCond(id);
+      condCache.set(id, value);
+      condDirty = true;
+    });
+    if (context && typeof context.waitUntil === 'function') context.waitUntil(persistCond());
+    else await persistCond();
+  }
+
+  const items = {};
+  for (const id of ids) {
+    const value = condCache.get(id);
+    if (value) items[id] = value;
+  }
+  return Response.json(
+    { items, requested: ids.length, known: Object.keys(items).length },
+    { headers: { 'cache-control': 'public, max-age=300' } }
+  );
+}
+
 /* ---------------- 入口 ---------------- */
 export async function onRequestGet(context) {
   const url = new URL(context.request.url);
+  if (url.searchParams.get('cond') === '1') return handleCond(url, context);
+
   const kw = (url.searchParams.get('kw') || '').trim();
   const pagesPerScene = Math.max(1, Math.min(MAX_PAGES_PER_SCENE, Number(url.searchParams.get('pages') || 3)));
 
